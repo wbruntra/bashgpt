@@ -26,8 +26,14 @@ program
   .addHelpText('after', '\nExample:\n  $ bashgpt list all files in current directory')
   .argument('[query...]', 'Query for ChatGPT API')
   .action(async (query) => {
+    // Check if the required environment variable is set
+    if (!process.env.OPENAI_API_KEY) {
+      console.log(chalk.red('Error: OPENAI_API_KEY environment variable is not set.'))
+      process.exit(1)
+    }
+
     try {
-      const inputString = query.join(' ');
+      const inputString = query.join(' ')
       if (inputString.trim().length === 0) {
         console.log(chalk.red('Error: Please provide a query.'))
         process.exit(1)
@@ -75,10 +81,7 @@ program
           boxenOptions,
         )
 
-        const explanationBox = boxen(
-          `${chalk.cyan(explanation)}`,
-          boxenOptions,
-        )
+        const explanationBox = boxen(`${chalk.cyan(explanation)}`, boxenOptions)
 
         console.log(commandBox)
         console.log('\n')
@@ -111,7 +114,6 @@ program
           }
           rl.close()
         })
-
       } else {
         console.log(chalk.red('Error: Unable to parse the response from ChatGPT API.'))
       }
