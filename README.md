@@ -27,4 +27,6 @@ Replace `your_api_key_here` with your actual API key.
 ## Usage
 Run the bashgpt command followed by your query without quotes:
 
+```sh
 bashgpt list all files in the current directory
+```
