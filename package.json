@@ -1,6 +1,6 @@
 {
   "name": "bashgpt-cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A Node.js CLI tool that uses OpenAI's ChatGPT API to generate BASH command suggestions and explanations for a given task.",
   "main": "index.mjs",
   "bin": {
