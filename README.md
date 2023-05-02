@@ -16,15 +16,17 @@ npm install -g bashgpt
 ```
 
 ## Configuration
-Your shell need to have the `OPENAI_API_KEY` environmental variable accessible. You can add this to the end of your `.bashrc` file.
+
+You can set the `OPENAI_API_KEY` environmental variable in your shell, for example, at the end of your `.bashrc` file.
 
 ```sh
 export OPENAI_API_KEY=your_api_key_here
 ```
-Replace `your_api_key_here` with your actual API key.
 
+If `OPENAI_API_KEY` is not set for your environment, you will be prompted to provide it.
 
 ## Usage
+
 Run the bashgpt command followed by your query without quotes:
 
 ```sh

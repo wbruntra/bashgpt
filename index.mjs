@@ -7,7 +7,36 @@ import axios from 'axios'
 import axiosRetry from 'axios-retry'
 import readline from 'readline'
 import { exec } from 'child_process'
+import os from 'os'
 
+const getOsInfo = () => {
+  // Get the platform (operating system) information
+  const platform = os.platform()
+
+  // Get the shell information
+  const shell = process.env.SHELL
+
+  // Determine the user's operating system
+  let osName
+  switch (platform) {
+    case 'win32':
+      osName = 'Windows'
+      break
+    case 'darwin':
+      osName = 'macOS'
+      break
+    case 'linux':
+      osName = 'Linux'
+      break
+    default:
+      osName = 'Unknown'
+  }
+
+  return {
+    osName,
+    shell,
+  }
+}
 // Configure axios-retry
 axiosRetry(axios, {
   retries: 2, // Number of retries
@@ -19,6 +48,20 @@ axiosRetry(axios, {
   },
 })
 
+const getApiKey = () => {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+
+  return new Promise((resolve) => {
+    rl.question('Please enter your OPENAI_API_KEY: ', (apiKey) => {
+      resolve(apiKey)
+      rl.close()
+    })
+  })
+}
+
 const program = new Command()
 
 program
@@ -27,8 +70,13 @@ program
   .argument('[query...]', 'Query for ChatGPT API')
   .action(async (query) => {
     // Check if the required environment variable is set
-    if (!process.env.OPENAI_API_KEY) {
-      console.log(chalk.red('Error: OPENAI_API_KEY environment variable is not set.'))
+    let apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      console.log(chalk.yellow('OPENAI_API_KEY environment variable is not set.'))
+      apiKey = await getApiKey()
+    }
+    if (apiKey.trim().length === 0) {
+      console.log(chalk.red('Error: API key needed to proceed'))
       process.exit(1)
     }
 
@@ -39,6 +87,8 @@ program
         process.exit(1)
       }
 
+      const { osName, shell } = getOsInfo()
+
       console.log('Sending query to ChatGPT API...')
       const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
@@ -47,7 +97,12 @@ program
           messages: [
             {
               role: 'user',
-              content: `Generate a suggested BASH command for the following task: ${inputString}\n. Provide an explanation of how the command works, including any command-line flags. The command can include placeholders for common parameters that will need to be filled in by the user, denoted by brackets []. The response must use this format:\nCommand: [[BASH_COMMAND]]\nExplanation: [[EXPLANATION]]\nThe explanation can include newlines if helpful for readability.`,
+              content:
+                `Generate a command for ${osName} on ${shell}: ${inputString}\n` +
+                `Include an explanation with format:\n` +
+                `Command: [[BASH_COMMAND]]\n` +
+                `Explanation: [[EXPLANATION]]\n` +
+                `Use brackets [] for placeholders.`,
             },
           ],
         },
