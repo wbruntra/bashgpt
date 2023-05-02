@@ -28,6 +28,10 @@ program
   .action(async (query) => {
     try {
       const inputString = query.join(' ');
+      if (inputString.trim().length === 0) {
+        console.log(chalk.red('Error: Please provide a query.'))
+        process.exit(1)
+      }
 
       console.log('Sending query to ChatGPT API...')
       const response = await axios.post(
