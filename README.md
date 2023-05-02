@@ -12,7 +12,7 @@ BashGPT is a Node.js CLI tool that uses OpenAI's ChatGPT API to generate BASH co
 1. Install the BashGPT package globally using npm:
 
 ```sh
-npm install -g bashgpt
+npm install -g bashgpt-cli
 ```
 
 ## Configuration
