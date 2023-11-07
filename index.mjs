@@ -93,18 +93,22 @@ program
       const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-3.5-turbo-1106',
           messages: [
             {
-              role: 'user',
+              role: 'system',
               content:
-                `Generate a command for ${osName} on ${shell}: ${inputString}\n` +
-                `Include an explanation with format:\n` +
-                `Command: [[BASH_COMMAND]]\n` +
-                `Explanation: [[EXPLANATION]]\n` +
-                `Use brackets [] for placeholders.`,
+                `Please respond in JSON format. The object should have the following keys:\n` +
+                `command: The command to run. Use brackets [] for placeholders (missing parameters).\n` +
+                `explanation: An explanation of the command\n` +
+                `executable: true/false if the command is directly executable (i.e. no missing parameters)`,
+            },
+            {
+              role: 'user',
+              content: `Generate a command for ${osName} on ${shell}: ${inputString}\n`,
             },
           ],
+          response_format: { type: 'json_object' },
         },
         {
           headers: {
@@ -114,55 +118,62 @@ program
         },
       )
 
-      const output = response.data.choices[0].message.content
+      const { finish_reason } = response.data.choices[0]
 
-      const pattern = /Command:\s*(.*)\s*Explanation:\s*(.*)/s
-      const match = output.match(pattern)
+      if (finish_reason !== 'stop') {
+        console.log(chalk.red('Error: ChatGPT API did not generate a command.'))
+        return
+      }
 
-      if (match) {
-        const bashCommand = match[1].trim()
-        const explanation = match[2].trim()
+      const message = response.data.choices[0].message
 
-        const boxenOptions = {
-          padding: 1,
-          margin: 1,
-          borderStyle: 'double',
-          borderColor: 'cyan',
-          backgroundColor: 'black',
-        }
+      const { command, explanation, executable } = JSON.parse(message.content)
 
-        const commandBox = boxen(
-          `${chalk.white.bold('BASH command:')}\n\n${chalk.green.bold(bashCommand)}`,
-          boxenOptions,
-        )
+      const boxenOptions = {
+        padding: 1,
+        margin: 1,
+        borderStyle: 'double',
+        borderColor: 'cyan',
+        backgroundColor: 'black',
+      }
 
-        const explanationBox = boxen(`${chalk.cyan(explanation)}`, boxenOptions)
+      // Display the command
+      const commandBox = boxen(
+        `${chalk.white.bold('BASH Command:')}\n\n${chalk.green.bold(command)}`,
+        boxenOptions,
+      )
 
-        console.log(commandBox)
-        console.log('\n')
-        console.log(explanationBox)
+      console.log(commandBox)
 
-        // Ask user if they want to run the command
+      // Display the explanation
+      const explanationBox = boxen(
+        `${chalk.white.bold('Explanation:')}\n\n${chalk.cyan(explanation)}`,
+        boxenOptions,
+      )
+      console.log(explanationBox)
+
+      // Conditionally prompt for execution
+      if (executable) {
         const rl = readline.createInterface({
           input: process.stdin,
           output: process.stdout,
         })
 
-        console.log(`\n`, chalk.green.bold(bashCommand))
+        console.log(`\n`, chalk.green.bold(command))
         rl.question('Do you want to run the command? [y/N] ', (answer) => {
           if (answer.toLowerCase() === 'y') {
             console.log(chalk.yellow('Running command...'))
-            exec(bashCommand, (error, stdout, stderr) => {
+            exec(command, (error, stdout, stderr) => {
               if (error) {
                 console.error(chalk.red(`Error: ${error.message}`))
-              } else {
-                if (stderr) {
-                  console.error(chalk.red(`Error: ${stderr}`))
-                } else {
-                  console.log(chalk.green('Command output:'))
-                  console.log(stdout)
-                }
+                return
               }
+              if (stderr) {
+                console.error(chalk.red(`Error: ${stderr}`))
+                return
+              }
+              console.log(chalk.green('Command output:'))
+              console.log(stdout)
             })
           } else {
             console.log(chalk.yellow('Command not executed.'))
@@ -170,9 +181,10 @@ program
           rl.close()
         })
       } else {
-        console.log(chalk.red('Error: Unable to parse the response from ChatGPT API.'))
+        console.log(chalk.yellow('The command has placeholders and cannot be executed directly.'))
       }
     } catch (error) {
+      console.log(error)
       console.error('Error:', error.message)
     }
   })
