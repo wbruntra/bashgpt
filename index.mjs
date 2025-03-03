@@ -8,6 +8,7 @@ import axiosRetry from 'axios-retry'
 import readline from 'readline'
 import { exec } from 'child_process'
 import os from 'os'
+import { getConfig, setConfig } from './config.mjs'
 
 const getOsInfo = () => {
   // Get the platform (operating system) information
@@ -70,7 +71,7 @@ program
   .argument('[query...]', 'Query for ChatGPT API')
   .action(async (query) => {
     // Check if the required environment variable is set
-    let apiKey = process.env.OPENAI_API_KEY
+    let apiKey = getConfig().apiKey || process.env.OPENAI_API_KEY
     if (!apiKey) {
       console.log(chalk.yellow('OPENAI_API_KEY environment variable is not set.'))
       apiKey = await getApiKey()
@@ -93,7 +94,7 @@ program
       const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
-          model: 'gpt-4o-mini',
+          model: getConfig().model,
           messages: [
             {
               role: 'system',
@@ -101,7 +102,7 @@ program
                 `Please respond in JSON format. The object should have the following keys:\n` +
                 `command: The command to run. Use brackets [] for placeholders (missing parameters).\n` +
                 `explanation: An explanation of the command\n` +
-                `executable: true/false if the command is directly executable (i.e. no missing parameters)`,
+                `executable: true/false if the command is directly executable (i.e. user does not need to fill in parameters)`,
             },
             {
               role: 'user',
@@ -113,7 +114,7 @@ program
         {
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            Authorization: `Bearer ${apiKey}`,
           },
         },
       )
@@ -188,5 +189,52 @@ program
       console.error('Error:', error.message)
     }
   })
+
+// Add these commands before program.parse()
+program
+  .command('config')
+  .description('Manage configuration')
+  .addCommand(
+    new Command('show').description('Show current configuration').action(() => {
+      const config = getConfig()
+      const boxenOptions = {
+        padding: 1,
+        margin: 1,
+        borderStyle: 'double',
+        borderColor: 'green',
+        backgroundColor: 'black',
+      }
+
+      console.log(
+        boxen(
+          `${chalk.white.bold('Current Configuration:')}\n\n` +
+            `API Key: ${config.apiKey ? '********' : 'Not set'}\n` +
+            `Model: ${config.model}\n` +
+            `Available Models:\n${config.availableModels.map((m) => `- ${m}`).join('\n')}`,
+          boxenOptions,
+        ),
+      )
+    }),
+  )
+  .addCommand(
+    new Command('set')
+      .description('Set configuration values')
+      .argument('<key>', 'Configuration key (apiKey/model)')
+      .argument('<value>', 'Configuration value')
+      .action((key, value) => {
+        const config = getConfig()
+        if (!['apiKey', 'model'].includes(key)) {
+          console.log(chalk.red('Invalid configuration key. Use "apiKey" or "model"'))
+          return
+        }
+        if (key === 'model' && !config.availableModels.includes(value)) {
+          console.log(chalk.red('Invalid model. Available models:'))
+          console.log(config.availableModels.join('\n'))
+          return
+        }
+        setConfig(key, value)
+        console.log(chalk.green(`${key} updated successfully`))
+      }),
+  )
 
 program.parse(process.argv)
