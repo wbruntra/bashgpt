@@ -3,51 +3,9 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import boxen from 'boxen'
-import axios from 'axios'
-import axiosRetry from 'axios-retry'
 import readline from 'readline'
-import { exec } from 'child_process'
-import os from 'os'
 import { getConfig, setConfig } from './config.mjs'
-
-const getOsInfo = () => {
-  // Get the platform (operating system) information
-  const platform = os.platform()
-
-  // Get the shell information
-  const shell = process.env.SHELL
-
-  // Determine the user's operating system
-  let osName
-  switch (platform) {
-    case 'win32':
-      osName = 'Windows'
-      break
-    case 'darwin':
-      osName = 'macOS'
-      break
-    case 'linux':
-      osName = 'Linux'
-      break
-    default:
-      osName = 'Unknown'
-  }
-
-  return {
-    osName,
-    shell,
-  }
-}
-// Configure axios-retry
-axiosRetry(axios, {
-  retries: 2, // Number of retries
-  retryDelay: (retryCount) => {
-    return retryCount * 2000 // Time interval between retries (in milliseconds)
-  },
-  retryCondition: (error) => {
-    return error.response.status === 429
-  },
-})
+import { fetchCommandFromAPI, executeCommand } from './bashgpt-core.mjs'
 
 const getApiKey = () => {
   const rl = readline.createInterface({
@@ -88,45 +46,17 @@ program
         process.exit(1)
       }
 
-      const { osName, shell } = getOsInfo()
-
       console.log('Sending query to ChatGPT API...')
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: getConfig().model,
-          messages: [
-            {
-              role: 'system',
-              content:
-                `Please respond in JSON format. The object should have the following keys:\n` +
-                `command: The command to run. Use brackets [] for placeholders (missing parameters).\n` +
-                `explanation: An explanation of the command\n` +
-                `executable: true/false if the command is directly executable (i.e. user does not need to fill in parameters)`,
-            },
-            {
-              role: 'user',
-              content: `Generate a command for ${osName} on ${shell}: ${inputString}\n`,
-            },
-          ],
-          response_format: { type: 'json_object' },
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-        },
-      )
+      const response = await fetchCommandFromAPI(inputString, apiKey, getConfig().model)
 
-      const { finish_reason } = response.data.choices[0]
+      const { finish_reason } = response.choices[0]
 
       if (finish_reason !== 'stop') {
         console.log(chalk.red('Error: ChatGPT API did not generate a command.'))
         return
       }
 
-      const message = response.data.choices[0].message
+      const message = response.choices[0].message
 
       const { command, explanation, executable } = JSON.parse(message.content)
 
@@ -161,21 +91,19 @@ program
         })
 
         console.log(`\n`, chalk.green.bold(command))
-        rl.question('Do you want to run the command? [y/N] ', (answer) => {
+        rl.question('Do you want to run the command? [y/N] ', async (answer) => {
           if (answer.toLowerCase() === 'y') {
             console.log(chalk.yellow('Running command...'))
-            exec(command, (error, stdout, stderr) => {
-              if (error) {
-                console.error(chalk.red(`Error: ${error.message}`))
-                return
-              }
-              if (stderr) {
-                console.error(chalk.red(`Error: ${stderr}`))
-                return
-              }
+
+            // Use executeCommand function instead of inline exec
+            const result = await executeCommand(command)
+
+            if (result.success) {
               console.log(chalk.green('Command output:'))
-              console.log(stdout)
-            })
+              console.log(result.output)
+            } else {
+              console.error(chalk.red(`Error: ${result.error}`))
+            }
           } else {
             console.log(chalk.yellow('Command not executed.'))
           }
@@ -190,7 +118,6 @@ program
     }
   })
 
-// Add these commands before program.parse()
 program
   .command('config')
   .description('Manage configuration')
