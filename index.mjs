@@ -49,16 +49,51 @@ program
       console.log('Sending query to ChatGPT API...')
       const response = await fetchCommandFromAPI(inputString, apiKey, getConfig().model)
 
-      const { finish_reason } = response.choices[0]
-
-      if (finish_reason !== 'stop') {
-        console.log(chalk.red('Error: ChatGPT API did not generate a command.'))
+      // Handle the new structured outputs response format
+      if (response.status !== 'completed') {
+        console.log(chalk.red('Error: API request was not completed successfully.'))
+        if (response.incomplete_details) {
+          console.log(chalk.red(`Reason: ${response.incomplete_details.reason}`))
+        }
         return
       }
 
-      const message = response.choices[0].message
+      const output = response.output[0]
+      if (!output || !output.content || !output.content[0]) {
+        console.log(chalk.red('Error: No content in API response.'))
+        return
+      }
 
-      const { command, explanation, executable } = JSON.parse(message.content)
+      const content = output.content[0]
+      
+      // Check for refusal
+      if (content.type === 'refusal') {
+        console.log(chalk.red(`API refused the request: ${content.refusal}`))
+        return
+      }
+
+      // Parse the structured output
+      let parsedResponse
+      try {
+        // Get the actual text content from the structured response
+        let textContent
+        if (response.output_text) {
+          textContent = response.output_text
+        } else if (content.type === 'output_text') {
+          textContent = content.text
+        } else {
+          throw new Error('No text content found in response')
+        }
+        
+        parsedResponse = JSON.parse(textContent)
+      } catch (parseError) {
+        console.log(chalk.red('Error: Failed to parse API response.'))
+        console.error('Parse error:', parseError)
+        console.error('Raw response:', response)
+        return
+      }
+
+      const { command, explanation, executable } = parsedResponse
 
       const boxenOptions = {
         padding: 1,

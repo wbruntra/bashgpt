@@ -50,25 +50,49 @@ export const getOsInfo = () => {
 export const fetchCommandFromAPI = async (query, apiKey, model) => {
   const { osName, shell } = getOsInfo()
 
+  // Define the JSON schema for structured outputs
+  const schema = {
+    type: 'object',
+    properties: {
+      command: {
+        type: 'string',
+        description: 'The command to run. Use brackets [] for placeholders (missing parameters).'
+      },
+      explanation: {
+        type: 'string',
+        description: 'An explanation of the command'
+      },
+      executable: {
+        type: 'boolean',
+        description: 'true/false if the command is directly executable (i.e. user does not need to fill in parameters)'
+      }
+    },
+    required: ['command', 'explanation', 'executable'],
+    additionalProperties: false
+  }
+
   const response = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
+    'https://api.openai.com/v1/responses',
     {
       model: model,
-      messages: [
+      input: [
         {
           role: 'system',
-          content:
-            `Please respond in JSON format. The object should have the following keys:\n` +
-            `command: The command to run. Use brackets [] for placeholders (missing parameters).\n` +
-            `explanation: An explanation of the command\n` +
-            `executable: true/false if the command is directly executable (i.e. user does not need to fill in parameters)`,
+          content: `You are a helpful assistant that generates shell commands for ${osName} using ${shell}. Generate appropriate commands based on user requests.`,
         },
         {
           role: 'user',
-          content: `Generate a command for ${osName} on ${shell}: ${query}\n`,
+          content: `Generate a command for ${osName} on ${shell}: ${query}`,
         },
       ],
-      response_format: { type: 'json_object' },
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'bash_command',
+          schema: schema,
+          strict: true
+        }
+      }
     },
     {
       headers: {
